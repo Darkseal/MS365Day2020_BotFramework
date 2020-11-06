@@ -21,7 +21,7 @@ namespace MS365_DialogBot.Dialogs
         {
             _userProfileAccessor = userState.CreateProperty<UserProfile>(nameof(UserProfile));
 
-            // This array defines how the Waterfall will execute.
+            // Definisco l'array di WaterfallStep (da eseguire in sequenza)
             var waterfallSteps = new WaterfallStep[]
             {
                 NameStepAsync,
@@ -33,28 +33,28 @@ namespace MS365_DialogBot.Dialogs
                 SummaryStepAsync,
             };
 
-            // Add named dialogs to the DialogSet. These names are saved in the dialog state.
+            // Aggiungo le dialog che saranno presentate agli utenti
             AddDialog(new WaterfallDialog(nameof(WaterfallDialog), waterfallSteps));
             AddDialog(new TextPrompt(nameof(TextPrompt)));
             AddDialog(new ChoicePrompt(nameof(ChoicePrompt)));
             AddDialog(new NumberPrompt<int>(nameof(NumberPrompt<int>), AgePromptValidatorAsync));
 
-            // The initial child Dialog to run.
+            // Definisco la dialog iniziale (quella da cui far partire l'utente)
             InitialDialogId = nameof(WaterfallDialog);
         }
 
         private async Task<DialogTurnResult> NameStepAsync(WaterfallStepContext stepContext, CancellationToken cancellationToken)
         {
-            // Get the current profile object from user state.
+            // Recupero il profilo utente dall'UserState tramite l'userProfileAccessor
             var userProfile = await _userProfileAccessor.GetAsync(
                 stepContext.Context, () => new UserProfile(),
                 cancellationToken);
 
-            // set IsRegistering to TRUE, since the user initiated the registration process.
+            // Imposto la proprietà IsRegistering a TRUE
             userProfile.IsRegistering = true;
 
-            // WaterfallStep always finishes with the end of the Waterfall or with another dialog; here it is a Prompt Dialog.
-            // Running a prompt here means the next WaterfallStep will be run when the user's response is received.
+            // Ogni WaterfallStep deve terminare restituendo una dialog oppure la fine della waterfall:
+            // in questo caso restituiamo una dialog di tipo "TextPrompt", che ha lo scopo di acquisire una risposta da parte dell'utente.
             return await stepContext.PromptAsync(
                 nameof(TextPrompt),
                 new PromptOptions
@@ -67,7 +67,7 @@ namespace MS365_DialogBot.Dialogs
         {
             stepContext.Values["name"] = (string)stepContext.Result;
 
-            // We can send messages to the user at any point in the WaterfallStep.
+            // E' possibile inviare messaggi da qualsiasi WaterfallStep (ovvero in qualsiasi momento della waterfall)
             await stepContext.Context.SendActivityAsync(MessageFactory.Text($"Grazie mille, {stepContext.Result}."), cancellationToken);
 
             return await stepContext.PromptAsync(
@@ -85,8 +85,11 @@ namespace MS365_DialogBot.Dialogs
             var value = ((FoundChoice)stepContext.Result).Value;
             if (value == "Si")
             {
-                // User said "yes" so we will be prompting for the age.
-                // WaterfallStep always finishes with the end of the Waterfall or with another dialog; here it is a Prompt Dialog.
+                // Se l'utente ha dichiarato di voler comunicare l'età, presento una "NumberPrompt" dialog per acquisirla.
+                // La NumberPrompt dialog è simile alla TextPrompt, ma accetta solo valori numerici:
+                // se l'utente inserisce un valore non numerico, oppure il valore impostato non viene convalidato dal validator method
+                // che abbiamo definito come parametro al momento di instanziare la NumberPrompt Dialog, 
+                // è previsto un RetryPrompt da presentare a schermo.
                 var promptOptions = new PromptOptions
                 {
                     Prompt = MessageFactory.Text("Perfetto! Inserisci la tua età."),
@@ -97,11 +100,12 @@ namespace MS365_DialogBot.Dialogs
             }
             else
             {
+                // Se l'utente ha dichiarato di non voler comunicare l'età, salto direttamente al WaterfallStep successivo.
+
                 await stepContext.Context.SendActivityAsync(
                     MessageFactory.Text($"Nessun problema, {stepContext.Values["name"]}! Continuiamo pure."),
                     cancellationToken);
 
-                // User said "no" so we will skip the next step. Give -1 as the age.
                 return await stepContext.NextAsync(-1, cancellationToken);
             }
         }
@@ -138,7 +142,7 @@ namespace MS365_DialogBot.Dialogs
                 MessageFactory.Text($"Grazie per le risposte, {stepContext.Values["name"]}. Ecco un riepilogo dei dati che hai inserito:"),
                 cancellationToken);
 
-            // Get the current profile object from user state.
+            // Recupero il profilo utente dall'UserState così da poter presentare il riepilogo dei dati inseriti.
             var userProfile = await _userProfileAccessor.GetAsync(
                 stepContext.Context, () => new UserProfile(),
                 cancellationToken);
@@ -169,7 +173,7 @@ namespace MS365_DialogBot.Dialogs
 
         private async Task<DialogTurnResult> SummaryStepAsync(WaterfallStepContext stepContext, CancellationToken cancellationToken)
         {
-            // Get the current profile object from user state.
+            // Recupero il profilo utente dall'UserState
             var userProfile = await _userProfileAccessor.GetAsync(
                 stepContext.Context, () => new UserProfile(),
                 cancellationToken);
@@ -177,13 +181,15 @@ namespace MS365_DialogBot.Dialogs
             var value = ((FoundChoice)stepContext.Result).Value; 
             if (value == "Si")
             {
-                // TODO: register the user in a Database (or something like that)
+                // Se l'utente ha confermato la registrazione:
+
+                // TODO: registro l'utente nel Database (o qualcosa del genere)
 
                 await stepContext.Context.SendActivityAsync(
                     MessageFactory.Text("OPERAZIONE COMPLETATA!"),
                     cancellationToken);
 
-                // TODO: send the user a confirmation e-mail about his/her successful registration.
+                // TODO: invio all'utente una e-mail di conferma registrazione.
 
                 await stepContext.Context.SendActivityAsync(
                     MessageFactory.Text($"Grazie per esserti registrato, {userProfile.Name}: " +
@@ -196,7 +202,9 @@ namespace MS365_DialogBot.Dialogs
             }
             else
             {
-                // removes the collected user info
+                // Se l'utente non ha confermato la registrazione:
+
+                // Elimino i dati inseriti
                 stepContext.Values.Clear();
 
                 await stepContext.Context.SendActivityAsync(
@@ -204,16 +212,16 @@ namespace MS365_DialogBot.Dialogs
                     cancellationToken);
             }
 
-            // regardless of how it went, set IsRegistering to FALSE since the registration process is over.
+            // a prescindere dalla scelta dell'utente, imposto la proprietà IsRegistering a FALSE poiché la procedura di registrazione si è conclusa.
             userProfile.IsRegistering = false;
 
-            // WaterfallStep always finishes with the end of the Waterfall or with another dialog; here it is the end.
+            // restituisco la fine della Waterfall
             return await stepContext.EndDialogAsync(cancellationToken: cancellationToken);
         }
 
         private static Task<bool> AgePromptValidatorAsync(PromptValidatorContext<int> promptContext, CancellationToken cancellationToken)
         {
-            // This condition is our validation rule. You can also change the value at this point.
+            // convalido il dato relativo all'età inserita dall'utente (numerico, maggiore di 0, minore di 150)
             return Task.FromResult(promptContext.Recognized.Succeeded && promptContext.Recognized.Value > 0 && promptContext.Recognized.Value < 150);
         }
     }

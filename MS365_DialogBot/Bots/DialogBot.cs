@@ -54,7 +54,7 @@ namespace MS365_PromptBot
         {
             await base.OnTurnAsync(turnContext, cancellationToken);
 
-            // Salva gli eventuali cambiamenti di stato avvenuti durante il turno
+            // Aggiorno gli eventuali cambiamenti di stato avvenuti durante il turno
             await ConversationState.SaveChangesAsync(turnContext, false, cancellationToken);
             await UserState.SaveChangesAsync(turnContext, false, cancellationToken);
             await PrivateConversationState.SaveChangesAsync(turnContext, false, cancellationToken);
@@ -62,7 +62,7 @@ namespace MS365_PromptBot
 
         protected override async Task OnMessageActivityAsync(ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken)
         {
-            // recuperiamo il profilo dell'utente corrente dall'UserState
+            // Recupero il profilo dell'utente corrente dall'UserState
             var userStateAccessor = UserState.CreateProperty<UserProfile>(nameof(UserProfile));
             var userProfile = await userStateAccessor.GetAsync(turnContext, () => new UserProfile());
 
